@@ -669,7 +669,18 @@ int32_t CAN_ReadMsgObj(CAN_T *tCAN, uint8_t u8MsgObj, uint8_t u8Release, STR_CAN
     {
         /*Wait*/
     }
-
+		
+if((tCAN->IF[u8MsgIfNum].ARB2 & CAN_IF_ARB2_DIR_Msk) == 0ul)
+            {
+                /* Data Frame */
+                pCanMsg->FrameType = CAN_DATA_FRAME;
+            }
+            else
+            {
+				/* Remote Frame */
+                pCanMsg->FrameType = CAN_REMOTE_FRAME;
+            }
+						
     if((tCAN->IF[u8MsgIfNum].ARB2 & CAN_IF_ARB2_XTD_Msk) == 0U)
     {
         /* standard ID*/
@@ -1284,6 +1295,81 @@ void CAN_CLR_INT_PENDING_BIT(CAN_T *tCAN, uint8_t u32MsgNum)
 
     ReleaseIF(tCAN, u32MsgIfNum);
 }
+
+int32_t CAN_SetRxMsgObj_Remote(CAN_T *tCAN, uint8_t u8MsgObj, uint8_t u8idType, uint32_t u32id, uint8_t u8singleOrFifoLast)
+{
+    int32_t rev = 1l;
+    uint32_t u32MsgIfNum;
+
+    /* Get and lock a free interface */
+    if((u32MsgIfNum = LockIF_TL(tCAN)) == 2ul)
+    {
+        rev = 0; /* return FALSE */
+    }
+    else
+    {
+        /* Command Setting */
+        tCAN->IF[u32MsgIfNum].CMASK = CAN_IF_CMASK_WRRD_Msk | CAN_IF_CMASK_MASK_Msk | CAN_IF_CMASK_ARB_Msk |
+                                      CAN_IF_CMASK_CONTROL_Msk | CAN_IF_CMASK_DATAA_Msk | CAN_IF_CMASK_DATAB_Msk;
+
+        if(u8idType == CAN_STD_ID)    /* According STD/EXT ID format,Configure Mask and Arbitration register */
+        {
+            tCAN->IF[u32MsgIfNum].ARB1 = 0ul;
+            tCAN->IF[u32MsgIfNum].ARB2 = CAN_IF_ARB2_MSGVAL_Msk | (u32id & 0x7FFul) << 2;
+        }
+        else
+        {
+            tCAN->IF[u32MsgIfNum].ARB1 = u32id & 0xFFFFul;
+            tCAN->IF[u32MsgIfNum].ARB2 = CAN_IF_ARB2_MSGVAL_Msk | CAN_IF_ARB2_XTD_Msk | (u32id & 0x1FFF0000ul) >> 16;
+        }
+
+		 tCAN->IF[u32MsgIfNum].ARB2 |= CAN_IF_ARB2_DIR_Msk;
+		
+        //tCAN->IF[u8MsgIfNum].MCON |= CAN_IF_MCON_UMASK_Msk | CAN_IF_MCON_RXIE_Msk; 
+        //tCAN->IF[u32MsgIfNum].MCON = CAN_IF_MCON_UMASK_Msk | CAN_IF_MCON_RXIE_Msk | CAN_IF_MCON_RmtEn_Msk;
+		tCAN->IF[u32MsgIfNum].MCON = CAN_IF_MCON_UMASK_Msk | CAN_IF_MCON_RXIE_Msk;
+        if(u8singleOrFifoLast)
+        {
+            tCAN->IF[u32MsgIfNum].MCON |= CAN_IF_MCON_EOB_Msk;
+        }
+        else
+        {
+            tCAN->IF[u32MsgIfNum].MCON &= (~CAN_IF_MCON_EOB_Msk);
+        }
+
+        tCAN->IF[u32MsgIfNum].DAT_A1  = 0ul;
+        tCAN->IF[u32MsgIfNum].DAT_A2  = 0ul;
+        tCAN->IF[u32MsgIfNum].DAT_B1  = 0ul;
+        tCAN->IF[u32MsgIfNum].DAT_B2  = 0ul;
+
+        tCAN->IF[u32MsgIfNum].CREQ = 1ul + u8MsgObj;
+        ReleaseIF(tCAN, u32MsgIfNum);
+    }
+
+    return rev;
+}
+
+
+int32_t CAN_SetRxMsg_Remote(CAN_T *tCAN, uint32_t u32MsgNum, uint32_t u32IDType, uint32_t u32ID)
+{
+    int32_t rev = (int32_t)TRUE;
+    uint32_t u32TimeOutCount = 0ul;
+
+    while(CAN_SetRxMsgObj_Remote(tCAN, (uint8_t)u32MsgNum, (uint8_t)u32IDType, u32ID, (uint8_t)TRUE) == (int32_t)FALSE)
+    {
+        if(++u32TimeOutCount >= RETRY_COUNTS)
+        {
+            rev = (int32_t)(FALSE); /* return FALSE */
+            break;
+        }
+        else
+        {
+        }
+    }
+
+    return rev;
+}
+
 
 /*@}*/ /* end of group CAN_EXPORTED_FUNCTIONS */
 

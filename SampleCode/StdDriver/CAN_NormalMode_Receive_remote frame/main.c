@@ -11,6 +11,7 @@
  ******************************************************************************/
 #include <stdio.h>
 #include "NUC230_240.h"
+extern int32_t CAN_SetRxMsg_Remote(CAN_T *tCAN, uint32_t u32MsgNum, uint32_t u32IDType, uint32_t u32ID);
 uint8_t Remote_Frame_Receive_Flag = 0;
 
 #define PLL_CLOCK       50000000
@@ -364,7 +365,14 @@ void Test_NormalMode_Rx(CAN_T *tCAN)
         printf("Set Rx Msg Object failed\n");
         return;
     }
+		
+			if(CAN_SetRxMsg_Remote(CAN0, MSG(3),CAN_STD_ID, 0x7EE) == FALSE)
+    {
+        printf("Set Rx Msg Object failed\n");
+        return;
+    }
     /*Choose one mode to test*/
+		
 #if 0
     /* Polling Mode */
     while(1) {
